@@ -1,0 +1,146 @@
+# Thumbor + S3 Storage
+
+This docker image has Thumbor with tc\_aws included.
+
+Configurations here stores results and files on S3 instead of disk.
+
+## Usage
+
+These 3 environment variables could be used:
+
+### THUMBOR_PORT:
+To change port on with this service will be exposed.
+
+### THUMBOR_LOG_LEVEL
+To change log level.
+
+### THUMBOR_CONF
+To change path on Thumbor config.
+Actually, I don't see many reasons to change it.
+To change config, mount a thumbor.conf at /thumbor/thumbor.conf
+replacing the default config.
+
+## Simple Docker Usage
+
+Just run:
+
+```
+docker run -e AWS_ACCESS_KEY_ID=YOUR_S3_KEY_ID -e AWS_SECRET_ACCESS_KEY=YOUR_S3_ACCESS_KEY -p 8000:8000 dalthon/thumbor-s3-storage
+```
+
+## Docker Compose Usage on Development Environment
+
+You can easily run this image in development and debug it with an S3 compliant server without spend 1 penny.
+
+Just add `thumbor.local` and `s3.local` to you `/etc/hosts` pointing to 127.0.0.1 and run `docker-compose up`
+with these [docker-compose.yml](https://github.com/dalthon/docker-thumbor-s3-storage/blob/master/docker-compose.yml),
+[.env](https://github.com/dalthon/docker-thumbor-s3-storage/blob/master/.env) and
+[thumbor.conf](https://github.com/dalthon/docker-thumbor-s3-storage/blob/master/thumbor.conf) files as shown below:
+
+```
+version: '3.7'
+
+services:
+  thumbor:
+    image: dalthon/thumbor-s3-storage
+    env_file: .env
+    volumes:
+      - ./thumbor.conf:/thumbor/thumbor.conf
+    ports:
+      - ${THUMBOR_PORT}:${THUMBOR_PORT}
+    depends_on:
+      - minio.s3
+      - nginx
+    environment:
+      - VIRTUAL_HOST=${THUMBOR_HOST}
+      - VIRTUAL_PORT=${THUMBOR_PORT}
+
+  minio.s3:
+    image: minio/minio
+    env_file: .env
+    command: server --address ":${S3_PORT}" /data
+    ports:
+      - ${S3_PORT}:${S3_PORT}
+    environment:
+      - MINIO_ACCESS_KEY=${AWS_ACCESS_KEY_ID}
+      - MINIO_SECRET_KEY=${AWS_SECRET_ACCESS_KEY}
+      - VIRTUAL_HOST=${S3_HOST}
+
+  nginx:
+    image: jwilder/nginx-proxy
+    ports:
+      - 80:80
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+```
+
+```
+THUMBOR_NAME=thumbor
+THUMBOR_HOST=thumbor.local
+THUMBOR_PORT=8000
+AWS_ACCESS_KEY_ID=S3_KEY_ID
+AWS_SECRET_ACCESS_KEY=S3_ACCESS_KEY
+S3_PORT=9000
+S3_HOST=s3.local
+```
+
+```
+UPLOAD_ENABLED=False
+
+S3_USE_SIGV4=True
+
+LOADER='tc_aws.loaders.s3_loader'
+
+SECURITY_KEY='SOME_SECURITY_KEY'
+ALLOW_UNSAFE_URL=False
+
+STORAGE='tc_aws.storages.s3_storage'
+RESULT_STORAGE='tc_aws.result_storages.s3_storage'
+UPLOAD_PHOTO_STORAGE='tc_aws.storages.s3_storage'
+RESULT_STORAGE_STORES_UNSAFE=True
+
+TC_AWS_REGION='us-east-1'
+
+TC_AWS_STORAGE_BUCKET='thumborbucket'        # bucket for Storage
+TC_AWS_STORAGE_ROOT_PATH='storage'           # path prefix for Storage bucket
+
+TC_AWS_LOADER_BUCKET='thumborbucket'         # bucket for Loader
+TC_AWS_LOADER_ROOT_PATH='original'           # path prefix for Loader bucket
+
+TC_AWS_RESULT_STORAGE_BUCKET='thumborbucket' # bucket for result Storage
+TC_AWS_RESULT_STORAGE_ROOT_PATH='result'     # path prefix for Result storage bucket
+
+TC_AWS_STORAGE_SSE=False
+TC_AWS_STORAGE_RRS=False
+
+TC_AWS_ENABLE_HTTP_LOADER=True
+
+TC_AWS_ALLOWED_BUCKETS=False # List of allowed bucket to be requested
+TC_AWS_STORE_METADATA=True   # Store with metadata (for instance content-type)
+
+TC_AWS_ENDPOINT='http://minio.s3:9000'
+```
+
+## Deploy from Zero to simple Heroku with S3
+
+1. Fork this repo.
+2. Create an AWS account
+3. Create a bucket
+4. Edit thumbor.conf, more specifically:
+    1. Mark ALLOW_UNSAFE_URL as false
+    2. Add a decent SECURITY_KEY
+    3. Remove TC_AWS_ENDPOINT
+    4. Fill TC_AWS_STORAGE_BUCKET, TC_AWS_LOADER_BUCKET and TC_AWS_RESULT_STORAGE_BUCKET with your bucket
+5. Create an Heroku account
+6. Install Heroku toolbelt
+7. Run the following commands:
+```
+heroku create
+heroku buildpacks:set heroku/heroku-buildpack-python
+heroku buildpacks:add --index 1 https://github.com/dalthon/heroku-buildpack-imagemagick-webp
+heroku config:set AWS_ACCESS_KEY_ID=YOUR_AWS_ACCESS_KEY_ID
+heroku config:set AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET_ACCESS_KEY
+heroku config:set THUMBOR_SECURITY_KEY=YOUR_THUMBOR_SECURITY_KEY
+git push heroku master
+```
+8. (Optional) Configure Cloudfront to hit your app

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+THUMBOR_LOG_LEVEL="${THUMBOR_LOG_LEVEL:-info}"
+THUMBOR_PORT="${THUMBOR_PORT:-8000}"
+THUMBOR_CONF="${THUMBOR_CONF:-/thumbor/thumbor.conf}"
+
+thumbor -l $THUMBOR_LOG_LEVEL -p $THUMBOR_PORT -c $THUMBOR_CONF

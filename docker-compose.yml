@@ -1,0 +1,38 @@
+version: '3.7'
+
+services:
+
+  thumbor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dalthon/thumbor-s3-storage
+    env_file: .env
+    volumes:
+      - ./thumbor.conf:/thumbor/thumbor.conf
+    ports:
+      - ${THUMBOR_PORT}:${THUMBOR_PORT}
+    depends_on:
+      - minio.s3
+      - nginx
+    environment:
+      - VIRTUAL_HOST=${THUMBOR_HOST}
+      - VIRTUAL_PORT=${THUMBOR_PORT}
+
+  minio.s3:
+    image: minio/minio
+    env_file: .env
+    command: server --address ":${S3_PORT}" /data
+    ports:
+      - ${S3_PORT}:${S3_PORT}
+    environment:
+      - MINIO_ACCESS_KEY=${AWS_ACCESS_KEY_ID}
+      - MINIO_SECRET_KEY=${AWS_SECRET_ACCESS_KEY}
+      - VIRTUAL_HOST=${S3_HOST}
+
+  nginx:
+    image: jwilder/nginx-proxy
+    ports:
+      - 80:80
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
